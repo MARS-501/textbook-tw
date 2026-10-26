@@ -1,0 +1,61 @@
+/* Focus App 設計系統（tokens.json v2）。深色是預設，淺色由 data-theme="light" 切換。 */
+
+:root,
+:root[data-theme="dark"] {
+  --bg: #000000;
+  --surface-1: #0a0a0a;
+  --surface-2: #141414;
+  --veil: rgba(10, 10, 10, 0.6);
+  --line: #262626;
+  --line-strong: #6b6b6b;
+  --ink: #ffffff;
+  --on-ink: #000000;
+  --ink-muted: #a3a3a3;
+  --ink-faint: #8a8a8a;
+  --warn: #ffb000;
+  --on-warn: #000000;
+  --danger: #ff3355;
+  --on-danger: #000000;
+  --glass-fill-strong: rgba(255, 255, 255, 0.9);
+  --glass-edge: rgba(255, 255, 255, 0.42);
+  --glow-ink: 0 0 12px rgba(255, 255, 255, 0.55);
+  --light-field: radial-gradient(circle at 12% -10%, rgba(255, 255, 255, 0.1), rgba(255, 255, 255, 0) 60%);
+  --pressed: rgba(255, 255, 255, 0.08);
+}
+
+:root[data-theme="light"] {
+  --bg: #f4f0e6;
+  --surface-1: #ece7da;
+  --surface-2: #e3ddcd;
+  --veil: rgba(236, 231, 218, 0.6);
+  --line: #cdc6b4;
+  --line-strong: #716c61;
+  --ink: #2a2a2a;
+  --on-ink: #f4f0e6;
+  --ink-muted: #504d47;
+  --ink-faint: #605c54;
+  --glass-fill-strong: rgba(42, 42, 42, 0.9);
+  --glass-edge: rgba(42, 42, 42, 0.58);
+  --glow-ink: 0 0 0 rgba(0, 0, 0, 0);
+  --light-field: none;
+  --pressed: rgba(42, 42, 42, 0.08);
+}
+
+:root {
+  --font-grotesk: "Inter Tight", "Noto Sans TC", system-ui, sans-serif;
+  --font-sans: "Noto Sans TC", system-ui, sans-serif;
+  --font-serif: "Noto Serif TC", serif;
+
+  --space-1: 4px;
+  --space-2: 8px;
+  --space-3: 12px;
+  --space-4: 16px;
+  --space-6: 24px;
+  --space-8: 32px;
+  --touch-target: 48px;
+  --control-height: 40px;
+
+  --radius-glass: 14px;
+  --stroke-hair: 1px;
+  --stroke-bold: 2px;
+}

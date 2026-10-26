@@ -31,6 +31,10 @@ dist/
 .pytest_cache/
 .ruff_cache/
 
+# 桌面介面（Electron）
+app/node_modules/
+app/dist/
+
 # 模型與快取
 *.gguf
 *.onnx
