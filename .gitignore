@@ -1,0 +1,44 @@
+# 教科書與譯本有著作權：任何 PDF 都不上傳（測試用的自製 PDF 例外）
+*.pdf
+!tests/fixtures/**/*.pdf
+
+# 要翻譯的檔案與翻譯結果（保留空資料夾）
+input/**
+!input/**/
+!input/**/.gitkeep
+output/*
+!output/.gitkeep
+
+# 下載的原始名詞庫（由下載程式重新取得）
+glossary/raw/*
+!glossary/raw/.gitkeep
+
+# 評比用的教材段落
+eval/samples/*
+!eval/samples/.gitkeep
+
+# 金鑰與本機設定
+.env
+config/local.toml
+
+# Python
+__pycache__/
+*.py[cod]
+.venv/
+*.egg-info/
+build/
+dist/
+.pytest_cache/
+.ruff_cache/
+
+# 模型與快取
+*.gguf
+*.onnx
+.cache/
+
+# 系統與編輯器
+Thumbs.db
+desktop.ini
+.DS_Store
+.vscode/
+.idea/

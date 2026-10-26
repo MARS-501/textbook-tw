@@ -1,0 +1,109 @@
+# 術語來源清單
+# 下載後的原始檔放在 glossary/raw/（不上傳 GitHub，由下載程式重新取得）
+#
+# 國家教育研究院「學術名詞」英中對照 CSV
+# 授權：政府資料開放授權條款-第1版，可自由使用，需註明出處
+# 資料集說明：https://data.gov.tw （搜尋「國家教育研究院 學術名詞」）
+#
+# tier：core = 你的主要領域；support = 相關領域；optional = 碰到才用
+
+[naer]
+provider = "國家教育研究院"
+license = "政府資料開放授權條款-第1版"
+base_url = "https://opendata.naer.edu.tw/學術名詞/"
+
+[[source]]
+id = "航空太空"
+file = "國家教育研究院-航空太空學術名詞.csv"
+tier = "core"
+
+[[source]]
+id = "力學"
+file = "國家教育研究院-力學學術名詞.csv"
+tier = "core"
+
+[[source]]
+id = "數學"
+file = "國家教育研究院-數學學術名詞.csv"
+tier = "core"
+
+[[source]]
+id = "機械工程"
+file = "國家教育研究院-機械工程學術名詞.csv"
+tier = "core"
+
+[[source]]
+id = "物理學"
+file = "國家教育研究院-物理學學術名詞.csv"
+tier = "core"
+
+# 多一欄「中國大陸譯名」，用來抓出模型冒出的大陸用語
+[[source]]
+id = "兩岸對照-航空"
+file = "國家教育研究院-兩岸對照名詞-航空學術名詞.csv"
+tier = "core"
+
+[[source]]
+id = "造船工程"
+file = "國家教育研究院-造船工程學術名詞.csv"
+tier = "support"
+
+[[source]]
+id = "氣象學"
+file = "國家教育研究院-氣象學學術名詞.csv"
+tier = "support"
+
+[[source]]
+id = "土木工程"
+file = "國家教育研究院-土木工程學術名詞.csv"
+tier = "support"
+
+[[source]]
+id = "化學工程"
+file = "國家教育研究院-化學工程學術名詞.csv"
+tier = "support"
+
+[[source]]
+id = "機構與機器原理"
+file = "國家教育研究院-機構與機器原理學術名詞.csv"
+tier = "support"
+
+[[source]]
+id = "核能"
+file = "國家教育研究院-核能學術名詞.csv"
+tier = "support"
+
+[[source]]
+id = "統計學"
+file = "國家教育研究院-統計學學術名詞.csv"
+tier = "support"
+
+[[source]]
+id = "電機工程"
+file = "國家教育研究院-電機工程學術名詞.csv"
+tier = "optional"
+
+[[source]]
+id = "電子工程"
+file = "國家教育研究院-電子工程學術名詞.csv"
+tier = "optional"
+
+[[source]]
+id = "天文學"
+file = "國家教育研究院-天文學學術名詞.csv"
+tier = "optional"
+
+[[source]]
+id = "測量學"
+file = "國家教育研究院-測量學學術名詞.csv"
+tier = "optional"
+
+[[source]]
+id = "工程圖學"
+file = "國家教育研究院-工程圖學學術名詞.csv"
+tier = "optional"
+
+[[source]]
+id = "海洋科學"
+file = "國家教育研究院-海洋科學學術名詞.csv"
+tier = "optional"

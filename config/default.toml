@@ -1,0 +1,26 @@
+# textbook-tw 預設設定
+# 網頁介面與指令列的選項會覆蓋這裡的值
+
+[model]
+# 目前直接連 Ollama；第 3 階段改成翻譯閘道的網址
+base_url = "http://localhost:11434/v1"
+name = "qwen3.5:4b"
+
+[translation]
+lang_in = "en"
+lang_out = "zh-TW"
+# config/profiles/ 底下的檔名（不含 .toml）
+profile = "fluid-mechanics"
+
+[output]
+dir = "output"
+# 是否輸出純譯文版
+mono = true
+# 中英對照版格式：
+#   "side_by_side" 左右並排（左原文、右譯文）
+#   "alternating"  交替頁（原文頁、譯文頁輪流）
+#   "both"         兩種都輸出
+#   "none"         不輸出對照版
+dual = "both"
+# true = 對照版譯文在前
+translated_first = false
