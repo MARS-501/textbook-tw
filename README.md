@@ -3,7 +3,7 @@
 把英文 PDF 簡報與原文教科書翻成**台灣繁體中文**，並**保留原本的版面、圖表與公式**。
 翻譯全部在自己的電腦上用本地模型完成，不需要把檔案上傳到任何雲端服務。
 
-> 🚧 開發中，目前還不能使用。進度見下方「開發階段」。
+> 🚧 開發中。目前可以用指令列翻譯，術語表與網頁介面還在開發，進度見下方「開發階段」。
 
 ## 功能（規劃）
 
@@ -16,6 +16,53 @@
 - **本地模型**：透過 [Ollama](https://ollama.com) 執行，預設 Qwen3.5-4B，6GB 顯卡可用
 - **專業術語**：內建國家教育研究院學術名詞（航空太空、力學、數學、機械工程等），依科目決定優先順序，全書譯名一致
 - **台灣用語**：自動把簡體字與大陸用語修正為台灣繁體用語
+
+## 安裝
+
+需要 Windows／macOS／Linux，以及：
+
+1. [uv](https://docs.astral.sh/uv/)（Python 套件管理工具，會自動安裝 Python 3.12）
+2. [Ollama](https://ollama.com)，並下載模型：`ollama pull qwen3.5:4b`（約 3.3GB，6GB 顯卡可全部放進顯示記憶體）
+
+```bash
+git clone https://github.com/MARS-501/textbook-tw.git
+cd textbook-tw
+uv sync
+```
+
+第一次翻譯時，BabelDOC 會自動下載版面辨識模型與中文字型。
+
+## 使用方式
+
+把 PDF 放進 `input/` 底下，然後：
+
+```bash
+uv run textbook-tw translate input/slides/講義.pdf
+uv run textbook-tw translate input/textbooks/課本.pdf --pages 1-20 --dual alternating
+```
+
+結果會放在 `output/<檔名>/`：
+
+| 檔案 | 內容 |
+|---|---|
+| `<檔名>.譯文.pdf` | 純譯文版 |
+| `<檔名>.對照-並排.pdf` | 每頁左原文、右譯文 |
+| `<檔名>.對照-交替.pdf` | 原文頁、譯文頁輪流 |
+
+常用選項：
+
+| 選項 | 說明 |
+|---|---|
+| `--pages 1-5,8` | 只翻部分頁面（檔名會加上頁碼，不會蓋掉整份的結果） |
+| `--dual side_by_side／alternating／both／none` | 對照版格式，預設 `both` |
+| `--profile fluid-mechanics／aerospace／engineering-math` | 科目設定 |
+| `--font auto／serif／sans-serif` | 譯文字型；`auto` 時投影片用黑體 |
+| `--translated-first` | 對照版譯文放前面 |
+| `--no-mono` | 不輸出純譯文版 |
+
+預設值在 `config/default.toml`；想改成自己的預設，可以建立 `config/local.toml` 只寫要改的項目（不會上傳 GitHub）。
+
+翻譯中途按 Ctrl+C 中斷也沒關係，已翻好的段落有快取，重跑時會跳過。
 
 ## 資料夾說明
 
@@ -34,8 +81,8 @@
 
 ## 開發階段
 
-- [ ] 0. 環境：Python 3.12、Ollama、GitHub repo
-- [ ] 1. 最小可用：指令列翻譯一份 PDF，輸出純譯文版與對照版
+- [x] 0. 環境：Python 3.12、Ollama、GitHub repo
+- [x] 1. 最小可用：指令列翻譯一份 PDF，輸出純譯文版與對照版
 - [ ] 2. 術語系統：名詞庫下載與清理、科目設定、文件專屬術語表
 - [ ] 3. 翻譯閘道與模型評比：簡轉繁、大陸用語檢查、比較模型
 - [ ] 4. 網頁介面：拖放檔案、選科目與輸出格式、看進度

@@ -24,3 +24,8 @@ mono = true
 dual = "both"
 # true = 對照版譯文在前
 translated_first = false
+# 譯文字型：
+#   "auto"       投影片（橫向頁面）用黑體，其他依原文判斷
+#   "serif"      明體
+#   "sans-serif" 黑體
+font = "auto"

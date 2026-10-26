@@ -1,0 +1,36 @@
+[project]
+name = "textbook-tw"
+version = "0.1.0.dev0"
+description = "保留原版面的 PDF 英翻中（台灣繁體）工具"
+readme = "README.md"
+license = "AGPL-3.0-or-later"
+requires-python = ">=3.12,<3.13"
+dependencies = [
+    # BabelDOC 的 API 屬內部 API，鎖定版本，升級時要重新測試
+    "babeldoc==0.6.4",
+    "pymupdf",
+]
+
+[project.scripts]
+textbook-tw = "textbook_tw.cli:main"
+
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
+
+[tool.hatch.build.targets.wheel]
+packages = ["src/textbook_tw"]
+
+[tool.uv]
+# BabelDOC 對相依套件只設下限，之後的新版可能不相容（例如 bitstring 5 拿掉了 BitStream）。
+# 所以只採用 BabelDOC 0.6.4 發布當時已存在的版本。
+exclude-newer = "2026-07-17T00:00:00Z"
+
+[tool.ruff]
+line-length = 100
+
+[dependency-groups]
+dev = [
+    "pytest>=9.1.1",
+    "ruff>=0.15.22",
+]
