@@ -11,6 +11,8 @@ lang_in = "en"
 lang_out = "zh-TW"
 # config/profiles/ 底下的檔名（不含 .toml）
 profile = "fluid-mechanics"
+# 使用術語表（glossary/books/<檔名>.csv，第一次翻譯時自動建立）
+glossary = true
 
 [output]
 dir = "output"

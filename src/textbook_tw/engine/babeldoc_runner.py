@@ -14,6 +14,7 @@ from pathlib import Path
 import babeldoc.format.pdf.high_level as high_level
 from babeldoc.docvision.doclayout import DocLayoutModel
 from babeldoc.format.pdf.translation_config import TranslationConfig, WatermarkOutputMode
+from babeldoc.glossary import Glossary
 from babeldoc.translator.translator import OpenAITranslator, set_translate_rate_limiter
 
 from textbook_tw.config import Settings
@@ -62,12 +63,14 @@ def translate_pdf(
     work_dir: Path,
     pages: str | None = None,
     font_family: str | None = None,
+    glossary_csv: Path | None = None,
     on_progress: ProgressCallback | None = None,
 ) -> Path:
     """翻譯 input_pdf，回傳純譯文 PDF 的路徑。
 
     指定 pages 時，輸出只包含被翻譯的那些頁面，順序與原文相同。
     font_family 為 "serif"、"sans-serif" 或 None（由 BabelDOC 依原文判斷）。
+    glossary_csv 是 source,target 格式的術語表；BabelDOC 會把每批文字裡出現的術語附在指令中。
     """
     translator = OpenAITranslator(
         lang_in=settings.lang_in,
@@ -81,6 +84,7 @@ def translate_pdf(
     set_translate_rate_limiter(QPS)
 
     layout_model = _get_layout_model()
+    glossaries = [Glossary.from_csv(glossary_csv, settings.lang_out)] if glossary_csv else []
     config = TranslationConfig(
         translator=translator,
         input_file=str(input_pdf),
@@ -96,6 +100,7 @@ def translate_pdf(
         no_dual=True,
         watermark_output_mode=WatermarkOutputMode.NoWatermark,
         # 自動抽取術語會讓本地模型多跑一輪；術語改由 glossary 模組提供
+        glossaries=glossaries,
         auto_extract_glossary=False,
         save_auto_extracted_glossary=False,
         custom_system_prompt=SYSTEM_PROMPT.format(description=settings.profile.description),

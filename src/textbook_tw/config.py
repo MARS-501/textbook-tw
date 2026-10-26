@@ -28,6 +28,7 @@ class Settings:
     lang_in: str
     lang_out: str
     profile: Profile
+    glossary: bool
     output_dir: Path
     mono: bool
     dual: str
@@ -100,6 +101,7 @@ def load_settings() -> Settings:
         lang_in=translation["lang_in"],
         lang_out=translation["lang_out"],
         profile=load_profile(translation["profile"]),
+        glossary=translation.get("glossary", True),
         output_dir=output_dir,
         mono=output["mono"],
         dual=output["dual"],

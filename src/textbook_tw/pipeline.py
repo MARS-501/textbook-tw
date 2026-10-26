@@ -1,4 +1,4 @@
-"""一個翻譯任務的完整流程：檢查模型 → BabelDOC 翻譯 → 整理檔名 → 組對照版。"""
+"""一個翻譯任務的完整流程：檢查模型 → 術語表 → BabelDOC 翻譯 → 整理檔名 → 組對照版。"""
 
 from __future__ import annotations
 
@@ -7,16 +7,21 @@ import shutil
 import time
 import urllib.error
 import urllib.request
+from collections.abc import Callable
 from dataclasses import dataclass
 from pathlib import Path
 
 import pymupdf
 
 from textbook_tw.compose import dual
-from textbook_tw.config import Settings
+from textbook_tw.config import PROJECT_ROOT, Settings
 from textbook_tw.engine import babeldoc_runner
 from textbook_tw.engine.babeldoc_runner import ProgressCallback
+from textbook_tw.glossary import book
+from textbook_tw.glossary.lexicon import read_my_terms
 from textbook_tw.pages import format_pages, parse_pages
+
+MessageCallback = Callable[[str], None]
 
 
 class SetupError(RuntimeError):
@@ -44,6 +49,38 @@ def check_model(settings: Settings) -> None:
         )
 
 
+def display_path(path: Path) -> str:
+    try:
+        return str(path.relative_to(PROJECT_ROOT))
+    except ValueError:
+        return str(path)
+
+
+def describe_book_glossary(path: Path, terms: list[book.BookTerm]) -> str:
+    review = sum(t.status == book.STATUS_REVIEW for t in terms)
+    return (
+        f"術語表 {display_path(path)}：{len(terms)} 個詞，其中 {review} 個待確認（可用 Excel 編輯）"
+    )
+
+
+def prepare_glossary(
+    input_pdf: Path, settings: Settings, work_dir: Path, on_message: MessageCallback
+) -> Path:
+    """沿用這本書的術語表（沒有就掃描建立），合併 my_terms 後輸出給 BabelDOC。"""
+    path = book.book_path(input_pdf)
+    if path.exists():
+        on_message(f"使用術語表 {display_path(path)}")
+    else:
+        on_message("掃描全文、建立術語表…")
+        path, terms = book.create_book_glossary(input_pdf, settings.profile)
+        on_message("已建立" + describe_book_glossary(path, terms))
+
+    export = work_dir / "terms.csv"
+    count = book.export_for_babeldoc(book.read_terms(path), read_my_terms(), export)
+    on_message(f"本次使用 {count} 個術語（含 my_terms.csv）")
+    return export
+
+
 def _resolve_font(font: str, doc: pymupdf.Document) -> str | None:
     """auto：投影片（第一頁是橫向）用黑體，其他交給 BabelDOC 依原文判斷。"""
     if font != "auto":
@@ -57,6 +94,7 @@ def translate(
     settings: Settings,
     pages: str | None = None,
     on_progress: ProgressCallback | None = None,
+    on_message: MessageCallback = lambda _message: None,
 ) -> Outputs:
     started = time.perf_counter()
     input_pdf = input_pdf.resolve()
@@ -74,12 +112,16 @@ def translate(
     # 只翻部分頁面時檔名加上頁碼，避免蓋掉整份的結果
     prefix = f"{stem}.p{babeldoc_pages}" if babeldoc_pages else stem
 
+    glossary_csv = (
+        prepare_glossary(input_pdf, settings, work_dir, on_message) if settings.glossary else None
+    )
     raw_mono = babeldoc_runner.translate_pdf(
         input_pdf,
         settings,
         work_dir,
         pages=babeldoc_pages,
         font_family=font_family,
+        glossary_csv=glossary_csv,
         on_progress=on_progress,
     )
     mono = out_dir / f"{prefix}.譯文.pdf"

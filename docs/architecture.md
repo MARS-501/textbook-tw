@@ -40,7 +40,7 @@
 | 模組 | 位置 | 職責 |
 |---|---|---|
 | 版面引擎 | `src/textbook_tw/engine/` | 唯一直接呼叫 BabelDOC 的地方。BabelDOC 官方表示其 API 皆屬內部 API，因此鎖定版本並集中在此，升級時只改這裡 |
-| 術語系統 | `src/textbook_tw/glossary/` | 下載國教院名詞庫、清理、依科目合併、掃描 PDF 產生文件專屬術語表 |
+| 術語系統 | `src/textbook_tw/glossary/` | `fetch` 下載國教院名詞庫、`naer` 解析與清理、`lexicon` 依科目合併、`book` 掃描 PDF 產生文件專屬術語表 |
 | 翻譯閘道 | `src/textbook_tw/gateway/` | BabelDOC 與 Ollama 之間的小型服務，處理模型差異與譯文品質 |
 | 後處理 | `src/textbook_tw/postprocess/` | OpenCC 簡轉繁（台灣用語）、全形標點、大陸用語檢查 |
 | 對照版組版 | `src/textbook_tw/compose/` | 用原文與純譯文 PDF 組出對照版 |
@@ -58,12 +58,19 @@ BabelDOC 每次只能輸出一種對照格式。純譯文版的頁面與原文�
 
 ## 術語策略
 
-1. **來源**：國家教育研究院學術名詞 CSV（清單見 `glossary/sources.toml`），之後可加 Wikidata（CC0）補充較新的詞
-2. **清理**：拆開一個英文詞對多個中文譯名的欄位、統一大小寫、過濾太短或太常見的單字（如 flow、field、set）
-3. **科目優先順序**：`config/profiles/*.toml` 決定名詞庫的優先順序，解決跨科目的譯名衝突（例如 moment 在力學是「力矩」、在統計是「動差」）
-4. **文件專屬術語表**：翻譯前先掃描 PDF，只挑出真的出現的詞（通常數百個），避免小模型處理量超載
-5. **使用者確認**：有多個候選譯名的詞讓使用者選一次，存成 `glossary/books/` 下這本書專用的術語表，各章沿用
-6. **個人修正**：`glossary/my_terms.csv` 優先權最高
+1. **來源**：國家教育研究院學術名詞 CSV（清單見 `glossary/sources.toml`，第一次使用時自動下載到 `glossary/raw/`），之後可加 Wikidata（CC0）補充較新的詞
+2. **清理**（`naer.py`）：
+   - 中文欄以「；」「;」「，」「、」拆成多個譯名，第一個是首選
+   - 刪除領域標記 `[天]`、`【物】`、`{螺槳}`、`｛數學｝`
+   - 中文括號：詞尾兩字以上是註解，刪除（房室阻滯（心電圖））；其他是可省略的字，保留（加速（度）梯度 → 加速度梯度）
+   - 英文倒裝還原（acceleration; gravitational → gravitational acceleration），刪除英文括號（縮寫）；含 `/`、`,` 的寫法無法判斷，略過
+3. **科目優先順序**（`lexicon.py`）：`config/profiles/*.toml` 的 `glossaries` 決定名詞庫的優先順序，解決跨科目的譯名衝突
+4. **文件專屬術語表**（`book.py`）：掃描 PDF 全文，只挑出真的出現的詞（含最後一個字的複數形）
+   - 多字詞組：都收（整組都是 less、than 這類功能字的除外）
+   - 單一單字：名詞庫裡大多是一般用字（can→罐、over→請回答、figure→數字），所以只看英文詞頻 Zipf < 3.6 的少見字（wordfreq），且至少兩個名詞庫首選譯名一致才收；不一致而且出現 3 次以上的列為「待確認」
+   - **必要性**：BabelDOC 用不分大小寫的子字串比對術語、不看單字邊界，若放入整個名詞庫，短字會誤中（lift 會比對到 uplift）
+5. **使用者確認**：術語表存成 `glossary/books/<檔名>.csv`（UTF-8 BOM，Excel 可直接開），使用者改 `target` 欄、清空代表不用；之後翻譯同一份 PDF 都沿用，`glossary scan --force` 才會覆蓋
+6. **個人修正**：`glossary/my_terms.csv` 優先權最高，每次翻譯時才合併，所以修改後不用重新掃描
 7. 關閉 BabelDOC 內建的自動術語抽取（`--no-auto-extract-glossary`），因為它會讓本地模型多跑一輪，時間約翻倍
 
 ## 模型評比
@@ -115,6 +122,36 @@ BabelDOC 每次只能輸出一種對照格式。純譯文版的頁面與原文�
 | 人名機構名偶爾仍被翻譯（Sandia National Laboratories → 沙國國家實驗室） | 4B 模型不一定遵守指令 | 術語表加入常見機構名；評比更大的模型 |
 
 整本 *Aerodynamics for Engineers* 第 8～9 章（120 頁）：**25 分 32 秒**（約每頁 13 秒）。
+
+**2026-10-26，第 2 階段，術語表**
+
+掃描 *Aerodynamics for Engineers* 第 8～9 章（約 4 萬字）只要約 3 秒；合併 9 個名詞庫約 2 秒。
+
+| 版本 | 術語數 | 待確認 | 備註 |
+|---|---|---|---|
+| 單字只看長度（≥ 7 字母） | 1061 | 155 | 待確認大多是一般用字（equation、surface、process） |
+| 加上英文詞頻篩選（Zipf < 3.6） | 851 | 40 | 待確認都是專業術語（airfoil、stagnation、isentropic、hypersonic） |
+
+科目設定影響很大：「流體力學」與「航太」兩種設定在 816 個共同術語中有 85 個譯名不同，例如：
+
+| 英文 | 流體力學（力學優先） | 航太（航空太空優先） |
+|---|---|---|
+| drag coefficient | 曳力係數 | 阻力係數 |
+| turbulent boundary layer | 亂流邊界層 | 紊流邊界層 |
+| perfect gas | 完全氣體 | 理想氣體 |
+| inviscid flow | 無黏滯流 | 非黏性流 |
+| control volume | 控制體 | 控制體積 |
+
+用「航太」術語表翻譯前 8 頁，與沒有術語表時比較：
+
+| 英文 | 沒有術語表 | 有術語表 |
+|---|---|---|
+| chain rule | 鏈式法則 | 鏈鎖法則、連鎖律 |
+| shock wave | 激波 4、衝擊波 4 | 震波 4、激波 4 |
+| perfect gas | 完美氣體 14 | 完全氣體 4（熱完全氣體）、完美氣體 2 |
+
+- 時間從 2 分 10 秒增為 2 分 54 秒（指令變長）
+- 4B 模型不一定照術語表翻；殘留的「激波」來自單獨出現的 shock（常用字，術語表沒收），可加進 `my_terms.csv` 或由第 3 階段的大陸用語替換處理
 | 相依套件太新導致 BabelDOC 無法啟動（bitstring 5） | BabelDOC 只設版本下限 | `tool.uv.exclude-newer` 鎖在 BabelDOC 發布當時 |
 | 大陸用語：伯努利（白努利）、鏈式法則（連鎖律）、迎角（攻角）、縮放噴嘴（漸縮漸擴噴嘴） | 小模型的訓練資料以大陸用語為主 | 第 2 階段術語表 |
 

@@ -9,6 +9,7 @@ dependencies = [
     # BabelDOC 的 API 屬內部 API，鎖定版本，升級時要重新測試
     "babeldoc==0.6.4",
     "pymupdf",
+    "wordfreq>=3.1.1",
 ]
 
 [project.scripts]
