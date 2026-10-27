@@ -3,7 +3,7 @@
 把英文 PDF 簡報與原文教科書翻成**台灣繁體中文**，並**保留原本的版面、圖表與公式**。
 翻譯全部在自己的電腦上用本地模型完成，不需要把檔案上傳到任何雲端服務。
 
-> 🚧 開發中。目前可以用指令列翻譯（含術語表），網頁介面還在開發，進度見下方「開發階段」。
+> 🚧 開發中（v0.1.0 預覽版）。可以用 Windows 桌面 App 或指令列翻譯，進度見下方「開發階段」。
 
 ## 功能（規劃）
 
@@ -18,6 +18,23 @@
 - **台灣用語**：自動把簡體字與大陸用語修正為台灣繁體用語
 
 ## 安裝
+
+### Windows 安裝版（建議）
+
+1. 到 [Releases](https://github.com/MARS-501/textbook-tw/releases) 下載最新的 `textbook-tw-Setup-<版本>.exe`，執行後照安裝精靈的步驟走：
+   - 可以選擇只裝給自己或所有使用者、安裝位置
+   - 會建立桌面與開始功能表捷徑
+   - 可從「設定 › 應用程式」解除安裝
+2. 安裝 [Ollama](https://ollama.com)，並下載模型：`ollama pull qwen3.5:4b`（約 3.3GB）
+3. 開啟 textbook-tw，右上角顯示「OLLAMA · LIVE」就能開始翻譯
+
+說明：
+- 安裝版已內附 Python 與所有套件，不需要另外安裝。
+- 第一次翻譯時，BabelDOC 會下載版面辨識模型與中文字型，需要網路。
+- 術語表、下載的名詞庫、你的修正表放在 `%APPDATA%\textbook-tw`。
+- 安裝檔沒有數位簽章，Windows 可能顯示「Windows 已保護您的電腦」。按「其他資訊 › 仍要執行」即可。
+
+### 從原始碼執行
 
 需要 Windows／macOS／Linux，以及：
 
@@ -71,7 +88,7 @@ BabelDOC 把每個中文字寫成獨立的文字物件，閱讀器開起來很�
 uv run textbook-tw optimize output/
 ```
 
-## 桌面 App（開發中）
+## 桌面 App（從原始碼執行）
 
 `app/` 是 Electron 桌面介面，會呼叫上面的 Python 程式翻譯（需要 [Node.js](https://nodejs.org) 與 uv）：
 
@@ -81,6 +98,17 @@ npm --prefix app run dev
 ```
 
 Windows PowerShell 若擋住 `npm`，改打 `npm.cmd`。只想看介面、不翻譯的話，`npm --prefix app run dev:web` 會在瀏覽器開啟示範模式。
+
+製作 Windows 安裝檔：
+
+```bash
+npm --prefix app run dist
+```
+
+這個指令依序做三件事：
+1. 用 uv 下載獨立的 Python 3.12，照 `uv.lock` 裝好套件。
+2. 連同程式碼放進 `app/.stage/`。
+3. 用 electron-builder 產生 `app/release/textbook-tw-Setup-<版本>.exe`（NSIS 安裝精靈）。
 
 ## 術語表
 
@@ -134,7 +162,7 @@ uv run textbook-tw glossary update                                  # 重新下�
 - [x] 1. 最小可用：指令列翻譯一份 PDF，輸出純譯文版與對照版
 - [x] 2. 術語系統：名詞庫下載與清理、科目設定、文件專屬術語表
 - [ ] 3. 翻譯閘道與模型評比：簡轉繁、大陸用語檢查、比較模型
-- [ ] 4. 網頁介面：拖放檔案、選科目與輸出格式、看進度
+- [x] 4. 桌面介面：拖放檔案、選科目與輸出格式、術語確認、看進度、Windows 安裝檔
 - [ ] 5. 收尾：安裝說明、自動測試
 
 設計細節見 [docs/architecture.md](docs/architecture.md)。

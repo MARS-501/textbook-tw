@@ -2,12 +2,17 @@
 
 from __future__ import annotations
 
+import os
 import tomllib
 from dataclasses import dataclass, field, replace
 from pathlib import Path
 
 PROJECT_ROOT = Path(__file__).resolve().parents[2]
 CONFIG_DIR = PROJECT_ROOT / "config"
+# 會寫入的資料（下載的名詞庫、各書術語表、my_terms、local.toml、預設輸出）放這裡。
+# 從原始碼執行時就是專案資料夾；安裝版的程式在 Program Files 不能寫，
+# 由桌面 App 用環境變數指到使用者的資料夾（%APPDATA%\textbook-tw）。
+DATA_ROOT = Path(os.environ.get("TEXTBOOK_TW_HOME") or PROJECT_ROOT)
 
 DUAL_MODES = ("side_by_side", "alternating", "both", "none")
 FONTS = ("auto", "serif", "sans-serif")
@@ -86,14 +91,14 @@ def load_profile(profile_id: str) -> Profile:
 
 def load_settings() -> Settings:
     data = _read_toml(CONFIG_DIR / "default.toml")
-    local = CONFIG_DIR / "local.toml"
+    local = DATA_ROOT / "config" / "local.toml"
     if local.exists():
         data = _merge(data, _read_toml(local))
 
     model, translation, output = data["model"], data["translation"], data["output"]
     output_dir = Path(output["dir"])
     if not output_dir.is_absolute():
-        output_dir = PROJECT_ROOT / output_dir
+        output_dir = DATA_ROOT / output_dir
 
     settings = Settings(
         base_url=model["base_url"],

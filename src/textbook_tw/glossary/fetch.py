@@ -9,11 +9,11 @@ from collections.abc import Callable
 from dataclasses import dataclass
 from pathlib import Path
 
-from textbook_tw.config import PROJECT_ROOT
+from textbook_tw.config import DATA_ROOT, PROJECT_ROOT
 
-GLOSSARY_DIR = PROJECT_ROOT / "glossary"
+SOURCES_FILE = PROJECT_ROOT / "glossary" / "sources.toml"  # 隨程式發布
+GLOSSARY_DIR = DATA_ROOT / "glossary"  # 會寫入：下載的名詞庫、各書術語表、my_terms.csv
 RAW_DIR = GLOSSARY_DIR / "raw"
-SOURCES_FILE = GLOSSARY_DIR / "sources.toml"
 
 
 @dataclass(frozen=True)

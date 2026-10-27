@@ -33,12 +33,22 @@ function createWindow() {
     if (url.startsWith("https://")) shell.openExternal(url);
     return { action: "deny" };
   });
-  // 開發用自我檢查：載入後印出畫面文字就結束，確認正式版畫得出來
+  // 開發用自我檢查：載入後印出畫面文字就結束，確認正式版畫得出來；
+  // 另外指定 TEXTBOOK_TW_SMOKE_PDF 時，也實際呼叫一次後端掃描術語（確認安裝版找得到內附的 Python）
   if (process.env.TEXTBOOK_TW_SMOKE_TEST) {
     win.webContents.once("did-finish-load", () => {
       setTimeout(async () => {
         const text = await win.webContents.executeJavaScript("document.body.innerText.slice(0, 300)");
-        process.stdout.write(`${JSON.stringify({ smokeTest: text })}\n`);
+        const result = { smokeTest: text };
+        if (process.env.TEXTBOOK_TW_SMOKE_PDF) {
+          try {
+            const review = await runBackend(["glossary", process.env.TEXTBOOK_TW_SMOKE_PDF, "--profile", "aerospace"]);
+            result.backend = { path: review.path, total: review.total, pending: review.pending };
+          } catch (e) {
+            result.backend = { error: e.message };
+          }
+        }
+        process.stdout.write(`${JSON.stringify(result)}\n`);
         app.quit();
       }, 2000);
     });
@@ -122,11 +132,29 @@ ipcMain.handle("ollama:status", async () => {
 
 // ---- Python 後端 ----------------------------------------------------------
 
+const BACKEND_ENV = { PYTHONIOENCODING: "utf-8", PYTHONUNBUFFERED: "1" };
+const SPAWN_ERROR = app.isPackaged ? "找不到內附的 Python，請重新安裝 textbook-tw" : "請確認已安裝 uv";
+
 function spawnBackend(args) {
+  if (app.isPackaged) {
+    // 安裝版：resources/python 是內附的 Python（套件已裝好），resources/backend 是 Python 程式。
+    // 術語表等會寫入的資料放 %APPDATA%\textbook-tw（安裝資料夾可能不能寫）。
+    const backend = path.join(process.resourcesPath, "backend");
+    const env = {
+      ...process.env,
+      ...BACKEND_ENV,
+      PYTHONPATH: path.join(backend, "src"),
+      PYTHONNOUSERSITE: "1",
+      TEXTBOOK_TW_HOME: path.join(app.getPath("appData"), "textbook-tw"),
+    };
+    delete env.PYTHONHOME; // 使用者自己裝的 Python 設定不能影響內附的
+    const python = path.join(process.resourcesPath, "python", "python.exe");
+    return spawn(python, ["-X", "utf8", "-m", "textbook_tw", "app", ...args], { cwd: backend, windowsHide: true, env });
+  }
   return spawn("uv", ["run", "--quiet", "--project", PROJECT_ROOT, "textbook-tw", "app", ...args], {
     cwd: PROJECT_ROOT,
     windowsHide: true,
-    env: { ...process.env, PYTHONIOENCODING: "utf-8", PYTHONUNBUFFERED: "1" },
+    env: { ...process.env, ...BACKEND_ENV },
   });
 }
 
@@ -142,7 +170,7 @@ function runBackend(args, input) {
     const err = [];
     child.stdout.on("data", (d) => out.push(d));
     child.stderr.on("data", (d) => err.push(d));
-    child.on("error", (e) => reject(new Error(`無法啟動 Python 後端（${e.message}）。請確認已安裝 uv。`)));
+    child.on("error", (e) => reject(new Error(`無法啟動 Python 後端（${e.message}）。${SPAWN_ERROR}。`)));
     child.on("close", (code) => {
       const lines = Buffer.concat(out).toString("utf8").trim().split(/\r?\n/).filter(Boolean);
       if (code === 0 && lines.length > 0) {
@@ -201,7 +229,7 @@ ipcMain.handle("backend:resolve", (event, pdfPath, profile) => {
       else if (payload.type === "done") result = payload;
       else if (payload.type === "error") failure = payload.message;
     });
-    child.on("error", (e) => reject(new Error(`無法啟動 Python 後端（${e.message}）。請確認已安裝 uv。`)));
+    child.on("error", (e) => reject(new Error(`無法啟動 Python 後端（${e.message}）。${SPAWN_ERROR}。`)));
     child.on("close", (code) => {
       if (resolving === current) resolving = null;
       if (result) resolve(result);
@@ -250,7 +278,7 @@ ipcMain.handle("job:start", (event, spec) => {
   });
   child.on("error", (e) => {
     current.finished = true;
-    send({ type: "error", message: `無法啟動 Python 後端（${e.message}）。請確認已安裝 uv。` });
+    send({ type: "error", message: `無法啟動 Python 後端（${e.message}）。${SPAWN_ERROR}。` });
   });
   child.on("close", (code) => {
     if (job === current) job = null;

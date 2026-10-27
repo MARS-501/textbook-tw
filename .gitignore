@@ -48,3 +48,7 @@ desktop.ini
 .DS_Store
 .vscode/
 .idea/
+
+# 打包安裝版的暫存與輸出
+app/.stage/
+app/release/

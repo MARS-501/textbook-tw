@@ -1,8 +1,11 @@
 {
   "name": "textbook-tw-app",
+  "productName": "textbook-tw",
   "private": true,
   "version": "0.1.0",
-  "description": "textbook-tw 桌面介面",
+  "description": "保留原版面，把英文 PDF 翻成台灣繁體中文",
+  "author": "MARS-501",
+  "homepage": "https://github.com/MARS-501/textbook-tw",
   "license": "AGPL-3.0-or-later",
   "main": "electron/main.cjs",
   "scripts": {
@@ -10,23 +13,24 @@
     "dev:web": "vite --host 127.0.0.1 --port 5173 --strictPort",
     "build": "tsc --noEmit && vite build",
     "start": "electron .",
-    "typecheck": "tsc --noEmit"
+    "typecheck": "tsc --noEmit",
+    "stage": "node scripts/stage-backend.mjs",
+    "dist": "npm run build && npm run stage && electron-builder --win nsis"
   },
-  "dependencies": {
+  "devDependencies": {
     "@fontsource/inter-tight": "^5.3.0",
     "@fontsource/noto-sans-tc": "^5.3.1",
     "@fontsource/noto-serif-tc": "^5.3.1",
-    "pdfjs-dist": "^5.7.284",
-    "react": "^19.3.1",
-    "react-dom": "^19.3.1"
-  },
-  "devDependencies": {
     "@types/react": "^19.3.0",
     "@types/react-dom": "^19.3.0",
     "@vitejs/plugin-react": "^5.2.0",
     "concurrently": "^9.2.5",
     "cross-env": "^10.1.0",
     "electron": "^39.8.10",
+    "electron-builder": "26.17.0",
+    "pdfjs-dist": "^5.7.284",
+    "react": "^19.3.1",
+    "react-dom": "^19.3.1",
     "typescript": "^5.9.3",
     "vite": "^7.3.7",
     "wait-on": "^8.0.5"
@@ -34,5 +38,44 @@
   "allowScripts": {
     "electron@39.8.10": true,
     "esbuild@0.28.2": true
+  },
+  "build": {
+    "appId": "tw.textbook.app",
+    "productName": "textbook-tw",
+    "copyright": "Copyright © 2026 MARS-501（AGPL-3.0）",
+    "directories": {
+      "output": "release",
+      "buildResources": "build"
+    },
+    "files": [
+      "dist/**",
+      "electron/**",
+      "build/icon.ico",
+      "package.json"
+    ],
+    "extraResources": [
+      { "from": ".stage/python", "to": "python" },
+      { "from": ".stage/backend", "to": "backend" }
+    ],
+    "win": {
+      "target": [{ "target": "nsis", "arch": ["x64"] }],
+      "icon": "build/icon.ico"
+    },
+    "nsis": {
+      "oneClick": false,
+      "perMachine": false,
+      "allowElevation": true,
+      "allowToChangeInstallationDirectory": true,
+      "createDesktopShortcut": true,
+      "createStartMenuShortcut": true,
+      "shortcutName": "textbook-tw",
+      "uninstallDisplayName": "textbook-tw",
+      "license": "../LICENSE",
+      "installerLanguages": ["zh_TW"],
+      "language": "1028",
+      "runAfterFinish": true,
+      "deleteAppDataOnUninstall": false,
+      "artifactName": "textbook-tw-Setup-${version}.${ext}"
+    }
   }
 }

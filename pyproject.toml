@@ -1,6 +1,6 @@
 [project]
 name = "textbook-tw"
-version = "0.1.0.dev0"
+version = "0.1.0"
 description = "保留原版面的 PDF 英翻中（台灣繁體）工具"
 readme = "README.md"
 license = "AGPL-3.0-or-later"
@@ -35,3 +35,7 @@ dev = [
     "pytest>=9.1.1",
     "ruff>=0.15.22",
 ]
+
+[tool.pytest.ini_options]
+# 只跑專案自己的測試（app/.stage 裡內附的 Python 套件也有測試檔）
+testpaths = ["tests"]

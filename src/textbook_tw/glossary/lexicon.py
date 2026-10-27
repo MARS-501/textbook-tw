@@ -78,6 +78,7 @@ def add_my_term(source: str, target: str, path: Path = MY_TERMS_FILE) -> None:
             if (row.get("source") or "").strip().lower() != source.strip().lower()
         ]
     rows.append({"source": source.strip(), "target": target.strip(), "note": ""})
+    path.parent.mkdir(parents=True, exist_ok=True)  # 安裝版第一次寫時資料夾還不存在
     with path.open("w", encoding="utf-8", newline="") as f:
         writer = csv.DictWriter(f, fieldnames=["source", "target", "note"], extrasaction="ignore")
         writer.writeheader()

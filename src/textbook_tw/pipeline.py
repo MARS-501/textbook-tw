@@ -15,7 +15,7 @@ from pathlib import Path
 import pymupdf
 
 from textbook_tw.compose import dual, optimize
-from textbook_tw.config import PROJECT_ROOT, Settings
+from textbook_tw.config import DATA_ROOT, Settings
 from textbook_tw.engine import babeldoc_runner
 from textbook_tw.engine.babeldoc_runner import BatchCallback, ProgressCallback
 from textbook_tw.glossary import book, resolve
@@ -56,7 +56,7 @@ def check_model(settings: Settings) -> None:
 
 def display_path(path: Path) -> str:
     try:
-        return str(path.relative_to(PROJECT_ROOT))
+        return str(path.relative_to(DATA_ROOT))
     except ValueError:
         return str(path)
 
