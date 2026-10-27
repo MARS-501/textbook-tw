@@ -3,6 +3,7 @@ description = "微分方程、線性代數、向量分析、複變、傅立葉�
 
 # 同一個英文詞在多個名詞庫有不同譯名時，排越前面的優先
 # 名稱對應 glossary/sources.toml 的 id；my_terms 是你自己的修正表
+# 有模型判斷上下文時，這個順序只在難分高下時參考
 glossaries = [
   "my_terms",
   "數學",

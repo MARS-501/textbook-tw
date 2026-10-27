@@ -14,7 +14,7 @@
   - 兩種都輸出
   - 另有純譯文版
 - **本地模型**：透過 [Ollama](https://ollama.com) 執行，預設 Qwen3.5-4B，6GB 顯卡可用
-- **專業術語**：內建國家教育研究院學術名詞（航空太空、力學、數學、機械工程等），依科目決定優先順序，全書譯名一致
+- **專業術語**：內建國家教育研究院學術名詞（航空太空、力學、數學、機械工程、材料科學、統計學等），由本地模型依文件上下文挑譯名，全書譯名一致
 - **台灣用語**：自動把簡體字與大陸用語修正為台灣繁體用語
 
 ## 安裝
@@ -55,7 +55,7 @@ uv run textbook-tw translate input/textbooks/課本.pdf --pages 1-20 --dual alte
 |---|---|
 | `--pages 1-5,8` | 只翻部分頁面（檔名會加上頁碼，不會蓋掉整份的結果） |
 | `--dual side_by_side／alternating／both／none` | 對照版格式，預設 `both` |
-| `--profile fluid-mechanics／aerospace／engineering-math` | 科目設定 |
+| `--profile fluid-mechanics／aerospace／engineering-math／materials` | 科目設定 |
 | `--font auto／serif／sans-serif` | 譯文字型；`auto` 時投影片用黑體 |
 | `--translated-first` | 對照版譯文放前面 |
 | `--no-mono` | 不輸出純譯文版 |
@@ -65,28 +65,49 @@ uv run textbook-tw translate input/textbooks/課本.pdf --pages 1-20 --dual alte
 
 翻譯中途按 Ctrl+C 中斷也沒關係，已翻好的段落有快取，重跑時會跳過。
 
+BabelDOC 把每個中文字寫成獨立的文字物件，閱讀器開起來很卡；翻譯完成後會自動合併（畫面不變）。之前翻好的檔案可以這樣處理，不用重翻：
+
+```bash
+uv run textbook-tw optimize output/
+```
+
+## 桌面 App（開發中）
+
+`app/` 是 Electron 桌面介面，會呼叫上面的 Python 程式翻譯（需要 [Node.js](https://nodejs.org) 與 uv）：
+
+```bash
+npm --prefix app install
+npm --prefix app run dev
+```
+
+Windows PowerShell 若擋住 `npm`，改打 `npm.cmd`。只想看介面、不翻譯的話，`npm --prefix app run dev:web` 會在瀏覽器開啟示範模式。
+
 ## 術語表
 
 第一次翻譯某份 PDF 時，程式會掃描全文，從國家教育研究院的名詞庫挑出文中出現的術語，存成 `glossary/books/<檔名>.csv`。之後翻譯同一份 PDF（包括只翻部分頁面）都用這份術語表，全書譯名一致。
+
+論文和課本常常跨領域（複合材料論文裡有材料、力學、統計用語），所以掃描後會讓本地模型**依這份文件的上下文挑譯名**：名詞庫譯名不一致的詞，連同它在文中的幾段原文與各名詞庫的候選，交給模型判斷。一本書只做一次；論文約 2 分鐘，120 頁課本約 8 分鐘。桌面 App 會在術語確認畫面顯示進度與模型的理由，可以停止或修改。
 
 用 Excel 打開這個檔案就能修改：
 
 | 欄位 | 說明 |
 |---|---|
 | `source` | 英文術語 |
-| `target` | 採用的譯名。**改這欄**就能換譯名；清空代表不使用 |
-| `status` | `待確認`：名詞庫譯名不一致，沒有自動採用，請從 `alternatives` 挑一個填進 `target`<br>`名詞庫譯名不同`：已採用科目設定裡優先的名詞庫，其他名詞庫的譯法列在 `alternatives` |
+| `target` | 採用的譯名。**改這欄**就能換譯名；清空代表不使用。<br>寫成 `剪力｜剪切`（全形直線隔開）代表翻譯時依每一段的意思挑一個 |
+| `status` | `模型建議`：模型依上下文選的，理由在 `note`<br>`依段落`：文中有不同意思，翻譯時每段從 `target` 列的譯名挑<br>`不套用`：模型判斷這裡只是一般用語或候選都不合適，翻譯時自行處理<br>`待確認`：名詞庫譯名不一致、還沒判斷，請從 `alternatives` 挑一個填進 `target`<br>`名詞庫譯名不同`：還沒判斷，暫用科目設定裡優先的名詞庫 |
 | `count` | 在這份文件出現的次數 |
-| `origin` | 譯名來自哪個名詞庫 |
+| `origin` | 譯名來自哪些名詞庫 |
 | `alternatives` | 其他候選譯名 |
+| `note` | 模型選這個譯名的理由 |
 
 所有文件共用的修正寫在 `glossary/my_terms.csv`（`source,target,note`），優先權最高。
 
-科目設定（`--profile`）決定名詞庫的優先順序，會影響譯名，例如 drag coefficient 在「力學」名詞庫是「曳力係數」，在「航空太空」是「阻力係數」。
+科目設定（`--profile`）決定名詞庫的優先順序。有模型判斷上下文時，這個順序只在難分高下時參考；沒判斷過的詞照這個順序選，例如 drag coefficient 在「力學」名詞庫是「曳力係數」，在「航空太空」是「阻力係數」。大陸用語（方差、置信、模量…）不會列為候選。
 
 ```bash
 uv run textbook-tw profiles                                         # 列出科目設定
-uv run textbook-tw glossary scan 課本.pdf --profile aerospace --force  # 換科目重建術語表（會覆蓋你的修改）
+uv run textbook-tw glossary scan 課本.pdf --profile aerospace --force  # 換科目重建術語表並讓模型判斷（會覆蓋你的修改）
+uv run textbook-tw glossary resolve 課本.pdf                         # 只讓模型判斷還沒判斷過的詞（--all 全部重判）
 uv run textbook-tw glossary update                                  # 重新下載名詞庫
 ```
 
@@ -99,7 +120,7 @@ uv run textbook-tw glossary update                                  # 重新下�
 | `input/slides/` | 放要翻譯的**簡報** PDF | ❌ |
 | `input/textbooks/` | 放要翻譯的**教科書** PDF | ❌ |
 | `output/` | 翻譯結果 | ❌ |
-| `config/` | 預設設定與科目設定（流體力學、航太、工程數學） | ✅ |
+| `config/` | 預設設定與科目設定（流體力學、航太、工程數學、材料與結構） | ✅ |
 | `glossary/` | 術語來源清單與你的修正表 `my_terms.csv` | ✅（原始名詞庫不上傳） |
 | `src/textbook_tw/` | 程式碼 | ✅ |
 | `eval/` | 模型評比（測試段落不上傳） | ✅ |

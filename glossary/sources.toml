@@ -43,6 +43,27 @@ id = "兩岸對照-航空"
 file = "國家教育研究院-兩岸對照名詞-航空學術名詞.csv"
 tier = "core"
 
+# 材料科學名詞分成好幾冊；複合材料、積層板、試驗用語大多在這幾冊
+[[source]]
+id = "金屬材料"
+file = "國家教育研究院-材料科學名詞-金屬材料學術名詞.csv"
+tier = "support"
+
+[[source]]
+id = "高分子材料"
+file = "國家教育研究院-材料科學名詞-高分子材料學術名詞.csv"
+tier = "support"
+
+[[source]]
+id = "陶瓷材料"
+file = "國家教育研究院-材料科學名詞-陶瓷材料學術名詞.csv"
+tier = "support"
+
+[[source]]
+id = "能源材料"
+file = "國家教育研究院-材料科學名詞-能源材料學術名詞.csv"
+tier = "optional"
+
 [[source]]
 id = "造船工程"
 file = "國家教育研究院-造船工程學術名詞.csv"

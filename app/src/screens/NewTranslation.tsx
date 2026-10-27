@@ -1,9 +1,8 @@
 import { useState } from "react";
 import type { DragEvent } from "react";
-import { isDesktop, pdfFromDrop, pickFolder, pickPdf, type OllamaStatus, type PdfFile } from "../bridge";
+import { hasBackend, isDesktop, pdfFromDrop, pickFolder, pickPdf, type OllamaStatus, type PdfFile } from "../bridge";
 import { DualIcon, Notice, PageStrip, Section, SectionTitle, Segmented, Stat, SwitchRow, Tag } from "../components/ui";
-import { DEMO_RECENT } from "../demo";
-import { defaultOutputDir, formatBytes, formatGiB } from "../lib/format";
+import { clock, defaultOutputDir, formatBytes, formatGiB } from "../lib/format";
 import { parsePages } from "../lib/pages";
 import { summarizePdf } from "../lib/pdf";
 import {
@@ -13,6 +12,7 @@ import {
   plannedOutputs,
   type Doc,
   type DualMode,
+  type FinishedJob,
   type FontChoice,
   type JobOptions,
 } from "../model";
@@ -54,6 +54,7 @@ export function NewTranslation({
   notice,
   onStart,
   onSaveDefault,
+  recent,
   onOpenRecent,
 }: {
   doc: Doc | null;
@@ -64,7 +65,8 @@ export function NewTranslation({
   notice: string | null;
   onStart: () => void;
   onSaveDefault: () => void;
-  onOpenRecent: () => void;
+  recent: FinishedJob[];
+  onOpenRecent: (job: FinishedJob) => void;
 }) {
   const [loading, setLoading] = useState(false);
   const [fileError, setFileError] = useState<string | null>(null);
@@ -118,6 +120,7 @@ export function NewTranslation({
     if (!doc) return setStartError("先選一個 PDF。");
     if (rangeError) return setStartError("頁面範圍寫錯了，請先修正。");
     if (outputs.length === 0) return setStartError("至少要輸出一種檔案。");
+    if (hasBackend && ollama && !ollama.live) return setStartError("連不到 Ollama。請先開啟 Ollama 再開始。");
     onStart();
   }
 
@@ -404,20 +407,23 @@ export function NewTranslation({
         <Section gap={0}>
           <SectionTitle>最近翻譯</SectionTitle>
           <div style={{ height: 8 }} />
-          {DEMO_RECENT.map((r) => (
+          {recent.length === 0 && <p className="t-caption c-faint">翻好的檔案會列在這裡。</p>}
+          {recent.map((r) => (
             <a
-              key={r.name}
+              key={r.finishedAt}
               href="#"
               className="row-line"
               onClick={(e) => {
                 e.preventDefault();
-                onOpenRecent();
+                onOpenRecent(r);
               }}
               style={{ display: "flex", justifyContent: "space-between", alignItems: "center", gap: 12, minHeight: 56 }}
             >
               <span style={{ display: "flex", flexDirection: "column", minWidth: 0 }}>
-                <span className="t-body wrap-any">{r.name}</span>
-                <span className="t-label c-faint">{r.meta}</span>
+                <span className="t-body wrap-any">{r.fileName}</span>
+                <span className="t-label c-faint">
+                  {r.pages.length} 頁 · {clock(r.seconds)}
+                </span>
               </span>
               <Tag kind="done">DONE</Tag>
             </a>

@@ -40,21 +40,23 @@ class Lexicon:
         return len(self._entries)
 
 
-def read_user_csv(path: Path) -> list[Term]:
-    """讀取使用者自己編輯的 source,target CSV；Excel 存檔可能是 UTF-8 或 Big5。"""
-    if not path.exists():
-        return []
+def decode_user_csv(path: Path) -> str:
+    """使用者可能用 Excel 存檔，編碼可能是 UTF-8 或 Big5。"""
     data = path.read_bytes()
     for encoding in ("utf-8-sig", "cp950"):
         try:
-            text = data.decode(encoding)
-            break
+            return data.decode(encoding)
         except UnicodeDecodeError:
             continue
-    else:
-        raise ValueError(f"{path} 的編碼無法辨識，請另存成 UTF-8 CSV")
+    raise ValueError(f"{path} 的編碼無法辨識，請另存成 UTF-8 CSV")
+
+
+def read_user_csv(path: Path) -> list[Term]:
+    """讀取使用者自己編輯的 source,target CSV。"""
+    if not path.exists():
+        return []
     terms = []
-    for row in csv.DictReader(text.splitlines()):
+    for row in csv.DictReader(decode_user_csv(path).splitlines()):
         source = (row.get("source") or "").strip()
         target = (row.get("target") or "").strip()
         if source and target:
@@ -64,6 +66,22 @@ def read_user_csv(path: Path) -> list[Term]:
 
 def read_my_terms() -> list[Term]:
     return read_user_csv(MY_TERMS_FILE)
+
+
+def add_my_term(source: str, target: str, path: Path = MY_TERMS_FILE) -> None:
+    """加入或取代 my_terms.csv 裡的一條譯名（英文不分大小寫）。"""
+    rows: list[dict[str, str]] = []
+    if path.exists():
+        rows = [
+            {k: v or "" for k, v in row.items()}
+            for row in csv.DictReader(decode_user_csv(path).splitlines())
+            if (row.get("source") or "").strip().lower() != source.strip().lower()
+        ]
+    rows.append({"source": source.strip(), "target": target.strip(), "note": ""})
+    with path.open("w", encoding="utf-8", newline="") as f:
+        writer = csv.DictWriter(f, fieldnames=["source", "target", "note"], extrasaction="ignore")
+        writer.writeheader()
+        writer.writerows(rows)
 
 
 def build_lexicon(profile: Profile) -> Lexicon:

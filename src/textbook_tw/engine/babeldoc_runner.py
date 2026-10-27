@@ -7,7 +7,9 @@ BabelDOC 官方表示它的 API 都屬於內部 API，所以版本鎖定在 pypr
 from __future__ import annotations
 
 import asyncio
+import json
 import logging
+import re
 from collections.abc import Callable
 from pathlib import Path
 
@@ -21,8 +23,16 @@ from textbook_tw.config import Settings
 
 logger = logging.getLogger(__name__)
 
-# (階段名稱, 整體進度 0～100)
-ProgressCallback = Callable[[str, float], None]
+# (階段名稱, 整體進度 0～100, 這個階段完成幾項, 這個階段共幾項)
+ProgressCallback = Callable[[str, float, int, int], None]
+# 剛翻好的一批段落：[(原文, 譯文), ...]，已去掉 BabelDOC 的公式佔位符號與樣式標籤
+BatchCallback = Callable[[list[tuple[str, str]]], None]
+
+TRANSLATE_STAGE = "Translate Paragraphs"
+
+_INPUT_MARKER = "## Here is the input:"
+_MARKUP = re.compile(r"</?style[^>]*>|\{v?\d+\}")
+_FALLBACK_LOGGER = "babeldoc.format.pdf.document_il.midend.il_translator_llm_only"
 
 # 同時送給模型的請求數；本地模型一次處理一批，太多只會排隊
 QPS = 4
@@ -45,6 +55,81 @@ class TranslationError(RuntimeError):
     pass
 
 
+def _plain(text: str) -> str:
+    return " ".join(_MARKUP.sub("", text).split())
+
+
+def parse_batch(prompt: str, output: str) -> list[tuple[str, str]]:
+    """從 BabelDOC 送出的指令與模型回傳的 JSON，配對出每一段的原文與譯文。"""
+    try:
+        inputs = json.loads(prompt.split(_INPUT_MARKER, 1)[1])
+        cleaned = output.strip().removeprefix("```json").removeprefix("```").removesuffix("```")
+        outputs = {item["id"]: item["output"] for item in json.loads(cleaned)}
+    except (IndexError, ValueError, KeyError, TypeError):
+        return []
+    return [
+        (_plain(item["input"]), _plain(outputs[item["id"]]))
+        for item in inputs
+        if item.get("id") in outputs and _plain(item.get("input", ""))
+    ]
+
+
+# 依段落選譯名的術語另外放一份術語表，BabelDOC 會把它列成「### Glossary: <名稱>」
+PER_PARAGRAPH_GLOSSARY = "per_paragraph"
+_PER_PARAGRAPH_HEADER = f"### Glossary: {PER_PARAGRAPH_GLOSSARY}"
+_PER_PARAGRAPH_NOTE = """\
+### Terms with several possible translations
+
+These terms are used with different meanings in different parts of this document. \
+For each paragraph, use exactly ONE of the listed translations: the one that fits what the \
+term means in that paragraph. Never write more than one of them."""
+_PER_PARAGRAPH_ROW = re.compile(r"^\| (.+?) \| (.+?｜.+?) \|$", re.M)
+
+
+def rewrite_prompt(prompt: str) -> str:
+    """BabelDOC 的指令要求「一律使用術語表譯名」；依段落選的術語改寫成「從這幾個挑一個」。"""
+    if _PER_PARAGRAPH_HEADER not in prompt:
+        return prompt
+    prompt = prompt.replace(_PER_PARAGRAPH_HEADER, _PER_PARAGRAPH_NOTE)
+    return _PER_PARAGRAPH_ROW.sub(
+        lambda m: f"| {m.group(1)} | {' or '.join(m.group(2).split('｜'))} |", prompt
+    )
+
+
+class _ObservedTranslator(OpenAITranslator):
+    """每翻好一批就回報，讓介面能顯示「剛翻好的段落」；並改寫依段落選譯名的術語。"""
+
+    on_batch: BatchCallback | None = None
+
+    def llm_translate(self, text, ignore_cache=False, rate_limit_params=None):
+        # 在這裡回報（而不是 do_llm_translate），用到快取的段落也算得到
+        result = super().llm_translate(text, ignore_cache, rate_limit_params)
+        if self.on_batch and text and result:
+            pairs = parse_batch(text, result)
+            if pairs:
+                self.on_batch(pairs)
+        return result
+
+    def do_llm_translate(self, text, rate_limit_params=None):
+        return super().do_llm_translate(rewrite_prompt(text) if text else text, rate_limit_params)
+
+    def do_translate(self, text, rate_limit_params=None):
+        # 格式出錯改逐段重翻時走這裡，指令裡一樣有術語表
+        return super().do_translate(rewrite_prompt(text) if text else text, rate_limit_params)
+
+
+class _FallbackCounter(logging.Handler):
+    """BabelDOC 在模型回傳格式不對時會逐段改用簡單指令重翻（不帶術語表），只會寫在紀錄裡。"""
+
+    def __init__(self, on_fallback: Callable[[], None]):
+        super().__init__(logging.WARNING)
+        self.on_fallback = on_fallback
+
+    def emit(self, record: logging.LogRecord) -> None:
+        if "Fallback to simple translation" in record.getMessage():
+            self.on_fallback()
+
+
 _layout_model: DocLayoutModel | None = None
 
 
@@ -65,14 +150,18 @@ def translate_pdf(
     font_family: str | None = None,
     glossary_csv: Path | None = None,
     on_progress: ProgressCallback | None = None,
+    on_batch: BatchCallback | None = None,
+    on_fallback: Callable[[], None] | None = None,
+    per_paragraph_csv: Path | None = None,
 ) -> Path:
     """翻譯 input_pdf，回傳純譯文 PDF 的路徑。
 
     指定 pages 時，輸出只包含被翻譯的那些頁面，順序與原文相同。
     font_family 為 "serif"、"sans-serif" 或 None（由 BabelDOC 依原文判斷）。
     glossary_csv 是 source,target 格式的術語表；BabelDOC 會把每批文字裡出現的術語附在指令中。
+    per_paragraph_csv 的 target 是「A｜B」，翻譯時每段依意思挑一個。
     """
-    translator = OpenAITranslator(
+    translator = _ObservedTranslator(
         lang_in=settings.lang_in,
         lang_out=settings.lang_out,
         model=settings.model,
@@ -81,10 +170,16 @@ def translate_pdf(
         # 關閉 Qwen3.5 的思考模式；不關的話每段慢約 20 倍
         reasoning="none",
     )
+    translator.on_batch = on_batch
     set_translate_rate_limiter(QPS)
 
     layout_model = _get_layout_model()
     glossaries = [Glossary.from_csv(glossary_csv, settings.lang_out)] if glossary_csv else []
+    if per_paragraph_csv:
+        per_paragraph = Glossary.from_csv(per_paragraph_csv, settings.lang_out)
+        if per_paragraph.entries:
+            per_paragraph.name = PER_PARAGRAPH_GLOSSARY
+            glossaries.append(per_paragraph)
     config = TranslationConfig(
         translator=translator,
         input_file=str(input_pdf),
@@ -112,7 +207,15 @@ def translate_pdf(
     )
     getattr(layout_model, "init_font_mapper", lambda _config: None)(config)
 
-    result = asyncio.run(_run(config, on_progress))
+    fallback_logger = logging.getLogger(_FALLBACK_LOGGER)
+    counter = _FallbackCounter(on_fallback) if on_fallback else None
+    if counter:
+        fallback_logger.addHandler(counter)
+    try:
+        result = asyncio.run(_run(config, on_progress))
+    finally:
+        if counter:
+            fallback_logger.removeHandler(counter)
     if result.mono_pdf_path is None:
         raise TranslationError("BabelDOC 沒有產生譯文 PDF")
     return Path(result.mono_pdf_path)
@@ -122,7 +225,12 @@ async def _run(config: TranslationConfig, on_progress: ProgressCallback | None):
     async for event in high_level.async_translate(config):
         kind = event["type"]
         if kind == "progress_update" and on_progress:
-            on_progress(event["stage"], event["overall_progress"])
+            on_progress(
+                event["stage"],
+                event["overall_progress"],
+                event.get("stage_current", 0),
+                event.get("stage_total", 0),
+            )
         elif kind == "error":
             raise TranslationError(str(event["error"]))
         elif kind == "finish":

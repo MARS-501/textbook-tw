@@ -1,18 +1,51 @@
-// 示範資料：術語掃描、翻譯進度與結果還沒接上 Python 後端，先用設計稿的內容。
-// 接上後端後，這個檔案只留給介面預覽使用。
+// 示範資料：用一般瀏覽器預覽介面時（沒有 Electron 與 Python 後端）使用，內容來自設計稿。
 
-export interface TermChoice {
+import { PICK_NONE, PICK_PER_PARAGRAPH, type ReviewTerm } from "./bridge";
+
+interface TermChoice {
   id: string;
   term: string;
   where: string;
   context: string;
-  suggest: number; // 預選的選項；-1 代表需要使用者選
+  suggest: number; // 預選的選項；-1 代表需要使用者選，-2 依段落
   options: { zh: string; src: string }[];
+  note?: string; // 有的話代表是模型依上下文選的
 }
 
-export const DEMO_TERMS: TermChoice[] = [
+/** 示範的術語確認清單，格式與後端回傳的相同。 */
+export function demoReview(): ReviewTerm[] {
+  return [...DEMO_TERMS, ...DEMO_TERMS_PRESET].map((t) => {
+    const match = /^p\.(\d+) 等 (\d+) 處$/.exec(t.where);
+    let status = t.note ? "模型建議" : "名詞庫譯名不同";
+    if (t.suggest === PICK_NONE) status = "待確認";
+    if (t.suggest === PICK_PER_PARAGRAPH) status = "依段落";
+    return {
+      source: t.term,
+      status,
+      count: match ? Number(match[2]) : 0,
+      page: match ? Number(match[1]) : 0,
+      context: t.context,
+      note: t.note ?? "",
+      options: t.options,
+      pick: t.suggest,
+      paragraph: t.suggest === PICK_PER_PARAGRAPH ? [0, 1] : [],
+    };
+  });
+}
+
+/** 示範：模型判斷要花一點時間，每批約 600 毫秒。 */
+export const DEMO_RESOLVE_MS_PER_BATCH = 600;
+export const DEMO_RESOLVE_TOTAL = 24;
+
+export const DEMO_TOTAL_TERMS = 312;
+
+const DEMO_TERMS: TermChoice[] = [
   { id: "moment", term: "moment", where: "p.14 等 63 處", context: "the pitching moment about the quarter-chord point", suggest: 0,
-    options: [{ zh: "力矩", src: "力學" }, { zh: "動差", src: "統計學" }, { zh: "矩", src: "數學" }] },
+    note: "本文指對四分之一弦點的俯仰力矩",
+    options: [{ zh: "力矩", src: "力學、航空太空" }, { zh: "動差", src: "統計學" }, { zh: "矩", src: "數學" }] },
+  { id: "shear", term: "shear", where: "p.71 等 10 處", context: "the wall shear stress in the boundary layer", suggest: -2,
+    note: "壁面剪應力與剪切流兩種用法",
+    options: [{ zh: "剪力", src: "力學" }, { zh: "剪切", src: "金屬材料、造船工程" }, { zh: "剪", src: "力學" }] },
   { id: "circulation", term: "circulation", where: "p.22 等 41 處", context: "the circulation around the airfoil determines the lift", suggest: -1,
     options: [{ zh: "環流量", src: "力學" }, { zh: "環流", src: "氣象學" }, { zh: "循環", src: "物理學" }] },
   { id: "head", term: "head", where: "p.31 等 9 處", context: "the total pressure head measured by the pitot tube", suggest: -1,
@@ -26,7 +59,7 @@ export const DEMO_TERMS: TermChoice[] = [
 ];
 
 // 「顯示其餘」展開的詞：已依科目的名詞庫順序選好
-export const DEMO_TERMS_PRESET: TermChoice[] = [
+const DEMO_TERMS_PRESET: TermChoice[] = [
   { id: "airfoil", term: "airfoil", where: "p.2 等 103 處", context: "the pressure distribution over a thin airfoil", suggest: 0,
     options: [{ zh: "翼剖面", src: "力學" }, { zh: "翼形", src: "航空太空" }] },
   { id: "stagnation", term: "stagnation", where: "p.4 等 54 處", context: "the stagnation pressure upstream of the shock", suggest: 0,
@@ -39,8 +72,6 @@ export const DEMO_TERMS_PRESET: TermChoice[] = [
     options: [{ zh: "可壓縮性", src: "力學" }, { zh: "壓縮係數", src: "氣象學" }] },
   { id: "divergence", term: "divergence", where: "p.18 等 16 處", context: "the drag divergence Mach number", suggest: 0,
     options: [{ zh: "發散", src: "力學" }, { zh: "散度", src: "力學" }] },
-  { id: "shear", term: "shear", where: "p.71 等 10 處", context: "the wall shear stress in the boundary layer", suggest: 0,
-    options: [{ zh: "剪力", src: "力學" }, { zh: "剪切", src: "造船工程" }] },
   { id: "turbulence", term: "turbulence", where: "p.75 等 5 處", context: "free-stream turbulence in the test section", suggest: 0,
     options: [{ zh: "紊流", src: "航空太空" }, { zh: "亂流", src: "力學" }] },
 ];

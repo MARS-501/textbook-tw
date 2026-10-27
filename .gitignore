@@ -34,6 +34,8 @@ dist/
 # 桌面介面（Electron）
 app/node_modules/
 app/dist/
+# App 圖示與產生它的程式（上面的 build/ 是 Python 打包輸出）
+!app/build/
 
 # 模型與快取
 *.gguf

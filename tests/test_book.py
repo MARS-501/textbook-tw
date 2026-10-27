@@ -53,7 +53,8 @@ def test_single_words():
     conflict = [c("力學", "airfoil", "翼剖面"), c("航空太空", "airfoil", "翼形", "翼切面")]
     review = select_term("airfoil", 103, conflict)
     assert (review.target, review.status) == ("", STATUS_REVIEW)
-    assert review.alternatives == "翼形（航空太空）；翼切面（航空太空）"
+    # 沒有採用任何譯名，所以每個候選都列在 alternatives
+    assert review.alternatives == "翼剖面（力學）；翼形（航空太空）；翼切面（航空太空）"
     # 不一致但出現次數太少：不列出
     assert select_term("airfoil", 2, conflict) is None
 
@@ -92,8 +93,10 @@ def test_write_read_and_export(tmp_path):
     assert [t.source for t in loaded] == ["Mach number", "shock wave"]  # 空白 target 不使用
 
     export = tmp_path / "terms.csv"
+    per_paragraph = tmp_path / "per_paragraph.csv"
     my_terms = [Term("shock wave", ("激波測試",)), Term("Feng Chia University", ("逢甲大學",))]
-    assert book.export_for_babeldoc(loaded, my_terms, export) == 3
+    loaded.append(Term("shear", ("剪力｜剪切",)))
+    assert book.export_for_babeldoc(loaded, my_terms, export, per_paragraph) == (3, 1)
     with export.open(encoding="utf-8") as f:
         rows = {r["source"]: r["target"] for r in csv.DictReader(f)}
     assert rows == {
@@ -101,9 +104,48 @@ def test_write_read_and_export(tmp_path):
         "Feng Chia University": "逢甲大學",
         "Mach number": "馬赫數",
     }
+    with per_paragraph.open(encoding="utf-8") as f:
+        assert {r["source"]: r["target"] for r in csv.DictReader(f)} == {"shear": "剪力｜剪切"}
+
+
+def test_options_keep_origins_of_per_paragraph_choices():
+    term = book.BookTerm(
+        "shear",
+        "剪力｜剪切",
+        book.STATUS_PER_PARAGRAPH,
+        33,
+        "",
+        "剪力（力學）；剪切（金屬材料）；剪（力學）",
+    )
+    assert book.options_of(term) == [("剪力", "力學"), ("剪切", "金屬材料"), ("剪", "力學")]
+
+
+def test_options_merge_glossaries_and_drop_mainland_terms():
+    candidates = [
+        Candidate("電機工程", "confidence level", ("置信水平", "信賴水準")),
+        Candidate("統計學", "confidence level", ("信賴水準",)),
+    ]
+    assert book._options(candidates) == [("信賴水準", "電機工程、統計學")]
+    term = book.select_term("confidence level", 2, candidates)
+    assert term.target == "信賴水準" and term.origin == "電機工程、統計學"
+
+
+def test_phrases_starting_with_an_article_are_not_terms():
+    assert book.select_term("a key", 3, [Candidate("電機工程", "A key", ("A 鍵",))]) is None
 
 
 def test_read_user_csv_accepts_big5_from_excel(tmp_path):
     path = tmp_path / "my_terms.csv"
     path.write_bytes("source,target,note\nairfoil,翼型,\n,,\n".encode("cp950"))
     assert read_user_csv(path) == [Term("airfoil", ("翼型",))]
+
+
+def test_write_terms_keeps_old_file_when_writing_fails(tmp_path):
+    path = tmp_path / "book.csv"
+    book.write_terms(path, [book.BookTerm("Mach number", "馬赫數", "", 1, "力學", "")])
+    broken = book.BookTerm("shear", "\udcff", "", 1, "力學", "")  # 無法編碼的字元
+    try:
+        book.write_terms(path, [broken])
+    except UnicodeEncodeError:
+        pass
+    assert [t.source for t in book.read_book(path)] == ["Mach number"]
