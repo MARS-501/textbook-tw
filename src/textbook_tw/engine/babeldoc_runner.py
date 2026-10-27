@@ -1,7 +1,7 @@
-"""唯一直接呼叫 BabelDOC 的地方。
+"""唯一直接呼叫 BabelDOC 的地方（keep_original.py 也讀 BabelDOC 的中間格式）。
 
 BabelDOC 官方表示它的 API 都屬於內部 API，所以版本鎖定在 pyproject.toml，
-升級時只需要修改這個檔案。
+升級時只需要修改 engine/ 底下的檔案。
 """
 
 from __future__ import annotations
@@ -15,11 +15,13 @@ from pathlib import Path
 
 import babeldoc.format.pdf.high_level as high_level
 from babeldoc.docvision.doclayout import DocLayoutModel
+from babeldoc.format.pdf.document_il.midend.il_translator_llm_only import ILTranslatorLLMOnly
 from babeldoc.format.pdf.translation_config import TranslationConfig, WatermarkOutputMode
 from babeldoc.glossary import Glossary
 from babeldoc.translator.translator import OpenAITranslator, set_translate_rate_limiter
 
 from textbook_tw.config import Settings
+from textbook_tw.engine import keep_original
 
 logger = logging.getLogger(__name__)
 
@@ -86,20 +88,96 @@ term means in that paragraph. Never write more than one of them."""
 _PER_PARAGRAPH_ROW = re.compile(r"^\| (.+?) \| (.+?｜.+?) \|$", re.M)
 
 
-def rewrite_prompt(prompt: str) -> str:
-    """BabelDOC 的指令要求「一律使用術語表譯名」；依段落選的術語改寫成「從這幾個挑一個」。"""
-    if _PER_PARAGRAPH_HEADER not in prompt:
-        return prompt
-    prompt = prompt.replace(_PER_PARAGRAPH_HEADER, _PER_PARAGRAPH_NOTE)
-    return _PER_PARAGRAPH_ROW.sub(
-        lambda m: f"| {m.group(1)} | {' or '.join(m.group(2).split('｜'))} |", prompt
-    )
+_FIGURE_TERMS_NOTE = """\
+## Words from this document's tables and figures
+
+Tables and figures in this document stay in English. Where the text below uses any of these \
+words, write the Chinese translation followed by the original English in full-width \
+parentheses, e.g. 密度（Density）. Do this only for these words:
+{terms}
+
+"""
+# 送給模型的文字從這兩個標記之後開始（批次指令、逐段重翻的指令）
+_INPUT_MARKERS = (_INPUT_MARKER, "Now translate the following text:")
+
+
+def _add_figure_terms(prompt: str, figure_terms: list[str]) -> str:
+    for marker in _INPUT_MARKERS:
+        head, found, text = prompt.partition(marker)
+        if found:
+            used = keep_original.terms_in(text, figure_terms)
+            if not used:
+                return prompt
+            note = _FIGURE_TERMS_NOTE.format(terms="\n".join(f"- {t}" for t in used))
+            return head + note + found + text
+    return prompt
+
+
+def rewrite_prompt(prompt: str, figure_terms: list[str] | None = None) -> str:
+    """改寫 BabelDOC 的指令：
+
+    - 依段落選譯名的術語：「一律使用術語表譯名」改成「從這幾個挑一個」
+    - 內文用到圖表裡的英文詞：要求中文後面附上英文
+    """
+    if _PER_PARAGRAPH_HEADER in prompt:
+        prompt = prompt.replace(_PER_PARAGRAPH_HEADER, _PER_PARAGRAPH_NOTE)
+        prompt = _PER_PARAGRAPH_ROW.sub(
+            lambda m: f"| {m.group(1)} | {' or '.join(m.group(2).split('｜'))} |", prompt
+        )
+    if figure_terms:
+        prompt = _add_figure_terms(prompt, figure_terms)
+    return prompt
+
+
+_original_translate = ILTranslatorLLMOnly.translate
+_original_should_translate = ILTranslatorLLMOnly._should_translate_paragraph
+
+
+def _translate_keeping_originals(self, docs):
+    """翻譯前先決定哪些段落保留原文（見 keep_original.py）。"""
+    plan = keep_original.plan(docs)
+    self._keep_original = plan.keep
+    if isinstance(self.translate_engine, _ObservedTranslator):
+        self.translate_engine.figure_terms = plan.figure_terms
+    logger.info("保留原文：%s；圖表詞 %d 個", plan.counts, len(plan.figure_terms))
+    return _original_translate(self, docs)
+
+
+def _should_translate(self, paragraph, translated_ids=None, require_body_text=False):
+    # 跨頁、跨欄的段落合併走這裡
+    if id(paragraph) in getattr(self, "_keep_original", ()):
+        return False
+    return _original_should_translate(self, paragraph, translated_ids, require_body_text)
+
+
+def _process_page(
+    self, page, executor, pbar=None, tracker=None, executor2=None, translated_ids=None
+):
+    # 一般段落走這裡：BabelDOC 只跳過「已翻過」的段落，所以把保留原文的段落先標成已翻過
+    keep = getattr(self, "_keep_original", set())
+    if translated_ids is not None:
+        skipped = [
+            p
+            for p in page.pdf_paragraph
+            if id(p) in keep and id(p) not in translated_ids and p.unicode is not None
+        ]
+        translated_ids.update(id(p) for p in skipped)
+        if pbar and skipped:
+            pbar.advance(len(skipped))  # 進度條的總數有算這些段落
+    return _original_process_page(self, page, executor, pbar, tracker, executor2, translated_ids)
+
+
+_original_process_page = ILTranslatorLLMOnly.process_page
+ILTranslatorLLMOnly.translate = _translate_keeping_originals
+ILTranslatorLLMOnly._should_translate_paragraph = _should_translate
+ILTranslatorLLMOnly.process_page = _process_page
 
 
 class _ObservedTranslator(OpenAITranslator):
-    """每翻好一批就回報，讓介面能顯示「剛翻好的段落」；並改寫依段落選譯名的術語。"""
+    """每翻好一批就回報，讓介面能顯示「剛翻好的段落」；並改寫指令（見 rewrite_prompt）。"""
 
     on_batch: BatchCallback | None = None
+    figure_terms: list[str] | None = None
 
     def llm_translate(self, text, ignore_cache=False, rate_limit_params=None):
         # 在這裡回報（而不是 do_llm_translate），用到快取的段落也算得到
@@ -111,11 +189,15 @@ class _ObservedTranslator(OpenAITranslator):
         return result
 
     def do_llm_translate(self, text, rate_limit_params=None):
-        return super().do_llm_translate(rewrite_prompt(text) if text else text, rate_limit_params)
+        return super().do_llm_translate(
+            rewrite_prompt(text, self.figure_terms) if text else text, rate_limit_params
+        )
 
     def do_translate(self, text, rate_limit_params=None):
         # 格式出錯改逐段重翻時走這裡，指令裡一樣有術語表
-        return super().do_translate(rewrite_prompt(text) if text else text, rate_limit_params)
+        return super().do_translate(
+            rewrite_prompt(text, self.figure_terms) if text else text, rate_limit_params
+        )
 
 
 class _FallbackCounter(logging.Handler):

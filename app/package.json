@@ -2,7 +2,7 @@
   "name": "textbook-tw-app",
   "productName": "textbook-tw",
   "private": true,
-  "version": "0.1.0",
+  "version": "0.1.1",
   "description": "保留原版面，把英文 PDF 翻成台灣繁體中文",
   "author": "MARS-501",
   "homepage": "https://github.com/MARS-501/textbook-tw",
